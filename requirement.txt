@@ -1,7 +1,8 @@
 streamlit
 streamlit-mic-recorder
-openai-whisper
+openai-whisper @ git+https://github.com/openai/whisper.git
 moviepy
 pydub
 scipy
+
 audioop-lts
