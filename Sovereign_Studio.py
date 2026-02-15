@@ -23,7 +23,7 @@ def process_audio(voice_path, music_path, music_volume, noise_reduction):
         try:
             bg = AudioSegment.from_file(music_path)
             
-            # THE FIX: Repeat music until it's longer than the voice
+            # THE FIX: Multiplication repeats the music manually
             repeats = (len(voice) // len(bg)) + 1
             bg_repeated = bg * repeats
             
