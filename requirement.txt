@@ -1,0 +1,7 @@
+streamlit
+streamlit-mic-recorder
+openai-whisper
+moviepy
+pydub
+scipy
+audioop-lts
