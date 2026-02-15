@@ -1,7 +1,6 @@
 import streamlit as st
 import whisper
 import os
-import requests
 from streamlit_mic_recorder import mic_recorder
 from pydub import AudioSegment, effects
 from moviepy.video.VideoClip import ColorClip, TextClip
@@ -12,20 +11,26 @@ from moviepy.video.compositing.CompositeVideoClip import CompositeVideoClip
 st.set_page_config(page_title="Sovereign Studio", page_icon="🎙️", layout="wide")
 st.title("🎙️ Sovereign Studio")
 
-# --- CORE FUNCTIONS ---
-def process_audio(file_path, bg_music_path, music_volume, noise_reduction):
-    voice = AudioSegment.from_file(file_path)
+# --- FIXED CORE FUNCTION ---
+def process_audio(voice_path, music_path, music_volume, noise_reduction):
+    # Load Voice
+    voice = AudioSegment.from_file(voice_path)
     voice = effects.normalize(voice)
     
     if noise_reduction > 0:
         voice = voice.high_pass_filter(noise_reduction)
     
-    if bg_music_path and os.path.exists(bg_music_path):
+    # Check if background music exists and has size
+    if os.path.exists(music_path) and os.path.getsize(music_path) > 0:
         try:
-            bg = AudioSegment.from_file(bg_music_path)
-            bg = bg.loop(duration=len(voice)) + music_volume 
-            final_mix = voice.overlay(bg)
-        except Exception:
+            bg = AudioSegment.from_file(music_path)
+            # Loop music to match voice and apply volume
+            bg_looped = bg.loop(duration=len(voice))
+            bg_combined = bg_looped + music_volume
+            # Overlay music onto voice
+            final_mix = voice.overlay(bg_combined)
+        except Exception as e:
+            st.error(f"Music Error: {e}")
             final_mix = voice
     else:
         final_mix = voice
@@ -34,6 +39,7 @@ def process_audio(file_path, bg_music_path, music_volume, noise_reduction):
     final_mix.export(output_path, format="mp3", bitrate="192k")
     return output_path
 
+# --- FUNCTIONS FOR VIDEO ---
 def create_video(audio_path, transcript):
     audio = AudioFileClip(audio_path)
     duration = min(audio.duration, 60)
@@ -74,15 +80,15 @@ with tab2:
     if os.path.exists("raw_audio.wav"):
         st.subheader("🎚️ The Studio Mixer")
         
-        # MUSIC UPLOAD MOVED HERE
-        st.markdown("---")
         st.write("🎵 **Add Background Music**")
         uploaded_bg = st.file_uploader("Upload music (e.g., 2face - Nobody)", type=["mp3"], key="bg_music")
-        if uploaded_bg:
-            with open("background.mp3", "wb") as f: f.write(uploaded_bg.getbuffer())
-            st.success("Music added to mixer!")
         
-        st.markdown("---")
+        # Save the uploaded music to a persistent file
+        if uploaded_bg:
+            with open("background.mp3", "wb") as f:
+                f.write(uploaded_bg.getbuffer())
+            st.success("Music loaded into mixer!")
+        
         col_vol, col_noise = st.columns(2)
         with col_vol:
             vol = st.slider("Music Volume", -40, -10, -25)
@@ -90,15 +96,21 @@ with tab2:
             noise = st.selectbox("Noise Cleanup", [0, 80, 150], format_func=lambda x: "None" if x==0 else "Standard")
         
         if st.button("✨ Mix & Transcribe"):
-            with st.spinner("Processing with 'small' AI model..."):
+            if not os.path.exists("background.mp3") and uploaded_bg is None:
+                st.warning("No music detected. Processing voice only...")
+            
+            with st.spinner("Mixing your track..."):
                 final_audio = process_audio("raw_audio.wav", "background.mp3", vol, noise)
+                
+                # Transcription
                 model = whisper.load_model("small")
                 result = model.transcribe("raw_audio.wav", fp16=False, language='en')
                 st.session_state['transcript'] = result['text']
+                
+                # Show the mixed result
                 st.audio(final_audio)
         
         if 'transcript' in st.session_state:
-            st.subheader("📝 Edit Transcript")
             st.session_state['transcript'] = st.text_area("Correct errors:", value=st.session_state['transcript'], height=200)
     else:
         st.info("Record your voice in Tab 1 first.")
@@ -113,4 +125,4 @@ with tab3:
                 with open(video_file, "rb") as f:
                     st.download_button("Download Video", f, "sovereign_promo.mp4")
     else:
-        st.info("Complete the transcription in Tab 2 first.")
+        st.info("Process your audio in Tab 2 first.")
